@@ -1,0 +1,42 @@
+name: Deploy Flask App to EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Deploy to EC2
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        script: |
+          
+          # Navigate to app directory
+          cd /home/ubuntu/backend
+          
+          # Pull latest changes from GitHub
+          git fetch origin
+          git reset --hard origin/main
+        
+          # Install dependencies (if any changes)
+          rm -rf venv
+          python3 -m venv venv
+          source /home/ubuntu/backend/venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          
+          # Restart the application service (e.g., Gunicorn via systemd)
+          sudo systemctl daemon-reload
+          sudo systemctl restart backend_dusan.service
+          
+          # Check service status (optional)
