@@ -345,6 +345,100 @@ class EmailService:
         
         return self.send_email(admin_email, subject, html_content)
 
+    def send_staff_invitation(self, invitee_email, invitee_name, council_name,
+                               invited_by_name, role_label, invitation_token,
+                               portal_url=None):
+        """
+        Send a staff invitation email from a Council Admin to a new staff member.
+
+        Parameters
+        ----------
+        invitee_email   : str  – recipient email address
+        invitee_name    : str  – recipient's full name (may be empty for new invites)
+        council_name    : str  – name of the council
+        invited_by_name : str  – full name of the Council Admin sending the invite
+        role_label      : str  – 'Council Staff' or 'Council Admin'
+        invitation_token: str  – one-time token embedded in the accept link
+        portal_url      : str  – base URL of the portal (defaults to env var or fallback)
+        """
+        base_url = portal_url or os.getenv('PORTAL_URL', 'https://app.grantthrive.com.au')
+        accept_url = f"{base_url}/accept-invitation?token={invitation_token}"
+
+        subject = f"You've been invited to join {council_name} on GrantThrive"
+
+        html_template = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { background-color: #1e40af; color: white; padding: 20px; text-align: center; }
+                .content { padding: 20px; background-color: #f9f9f9; }
+                .button { display: inline-block; padding: 14px 28px; background-color: #1e40af;
+                          color: white; text-decoration: none; border-radius: 6px; margin: 16px 0;
+                          font-weight: bold; }
+                .highlight { background-color: #eff6ff; padding: 15px;
+                             border-left: 4px solid #1e40af; margin: 15px 0; }
+                .footer { padding: 20px; text-align: center; font-size: 12px; color: #666; }
+                .note { font-size: 12px; color: #888; margin-top: 20px; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>You've Been Invited to GrantThrive</h1>
+                </div>
+                <div class="content">
+                    {% if invitee_name %}
+                    <h2>Hello {{ invitee_name }},</h2>
+                    {% else %}
+                    <h2>Hello,</h2>
+                    {% endif %}
+
+                    <p><strong>{{ invited_by_name }}</strong> has invited you to join
+                    <strong>{{ council_name }}</strong> on GrantThrive as
+                    <strong>{{ role_label }}</strong>.</p>
+
+                    <div class="highlight">
+                        <strong>Council:</strong> {{ council_name }}<br>
+                        <strong>Your Role:</strong> {{ role_label }}<br>
+                        <strong>Invited by:</strong> {{ invited_by_name }}<br>
+                        <strong>Invitation expires:</strong> 7 days from {{ current_date }}
+                    </div>
+
+                    <p>Click the button below to accept your invitation and set up your account.
+                    This link is unique to you and will expire in 7 days.</p>
+
+                    <a href="{{ accept_url }}" class="button">Accept Invitation &amp; Set Up Account</a>
+
+                    <p class="note">If you were not expecting this invitation, you can safely
+                    ignore this email. If you have concerns, contact us at
+                    support@grantthrive.com.au.</p>
+                </div>
+                <div class="footer">
+                    <p>&copy; 2025 GrantThrive. All rights reserved.</p>
+                    <p>This email was sent to {{ invitee_email }}</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+        template = Template(html_template)
+        html_content = template.render(
+            invitee_name=invitee_name,
+            invitee_email=invitee_email,
+            council_name=council_name,
+            invited_by_name=invited_by_name,
+            role_label=role_label,
+            accept_url=accept_url,
+            current_date=datetime.now().strftime("%B %d, %Y")
+        )
+
+        return self.send_email(invitee_email, subject, html_content)
+
+
 # Global email service instance
 email_service = EmailService()
 

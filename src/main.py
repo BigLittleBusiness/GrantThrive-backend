@@ -19,6 +19,7 @@ from src.routes.communication_routes import communication_bp
 from src.routes.qr_code_routes import qr_code_bp
 from src.routes.quick_wins_routes import quick_wins_bp
 from src.routes.community_engagement_routes import community_engagement_bp
+from src.routes.staff_invitation import staff_invitation_bp
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
@@ -40,6 +41,7 @@ app.register_blueprint(communication_bp, url_prefix='/api')
 app.register_blueprint(qr_code_bp, url_prefix='/api')
 app.register_blueprint(quick_wins_bp, url_prefix='/api')
 app.register_blueprint(community_engagement_bp, url_prefix='/api')
+app.register_blueprint(staff_invitation_bp, url_prefix='/api')
 
 # Database configuration
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'database', 'app.db')}"

@@ -63,6 +63,10 @@ class User(db.Model):
     website = db.Column(db.String(200), nullable=True)
     linkedin = db.Column(db.String(200), nullable=True)
     
+    # Multi-tenancy subdomain (council admins only)
+    # e.g. 'brisbane' for brisbane.grantthrive.com.au
+    subdomain = db.Column(db.String(100), nullable=True, unique=True, index=True)
+
     # Preferences
     email_notifications = db.Column(db.Boolean, nullable=False, default=True)
     sms_notifications = db.Column(db.Boolean, nullable=False, default=False)
@@ -127,7 +131,8 @@ class User(db.Model):
             'sms_notifications': self.sms_notifications,
             'is_government_user': self.is_government_user,
             'is_admin': self.is_admin,
-            'is_council_staff': self.is_council_staff
+            'is_council_staff': self.is_council_staff,
+            'subdomain': self.subdomain
         }
         
         if include_sensitive:
