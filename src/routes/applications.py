@@ -33,7 +33,33 @@ def require_auth(f):
 @applications_bp.route('/applications', methods=['GET'])
 @require_auth
 def get_applications():
-    """Get applications (filtered by user role)"""
+    """
+    List grant applications (filtered by the caller's role)
+    ---
+    tags:
+      - Applications
+    parameters:
+      - in: query
+        name: page
+        type: integer
+        default: 1
+      - in: query
+        name: per_page
+        type: integer
+        default: 10
+      - in: query
+        name: status
+        type: string
+        description: Filter by application status
+      - in: query
+        name: grant_id
+        type: integer
+    responses:
+      200:
+        description: Paginated list of applications
+      401:
+        description: Unauthorised
+    """
     try:
         page = request.args.get('page', 1, type=int)
         per_page = min(request.args.get('per_page', 10, type=int), 100)
@@ -112,7 +138,24 @@ def get_applications():
 @applications_bp.route('/applications/<int:application_id>', methods=['GET'])
 @require_auth
 def get_application(application_id):
-    """Get specific application by ID"""
+    """
+    Get a specific application by ID
+    ---
+    tags:
+      - Applications
+    parameters:
+      - in: path
+        name: application_id
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Application details
+      403:
+        description: Access denied
+      404:
+        description: Application not found
+    """
     try:
         application = Application.query.get_or_404(application_id)
         
@@ -145,7 +188,36 @@ def get_application(application_id):
 @applications_bp.route('/applications', methods=['POST'])
 @require_auth
 def create_application():
-    """Create new application"""
+    """
+    Submit a new grant application
+    ---
+    tags:
+      - Applications
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required: [grant_id]
+          properties:
+            grant_id:
+              type: integer
+              example: 1
+            project_title:
+              type: string
+            project_description:
+              type: string
+            requested_amount:
+              type: number
+    responses:
+      201:
+        description: Application created
+      400:
+        description: Validation error
+      401:
+        description: Unauthorised
+    """
     try:
         data = request.get_json()
         
@@ -225,7 +297,28 @@ def create_application():
 @applications_bp.route('/applications/<int:application_id>', methods=['PUT'])
 @require_auth
 def update_application(application_id):
-    """Update existing application"""
+    """
+    Update an existing application (draft only)
+    ---
+    tags:
+      - Applications
+    parameters:
+      - in: path
+        name: application_id
+        type: integer
+        required: true
+      - in: body
+        name: body
+        schema:
+          type: object
+    responses:
+      200:
+        description: Application updated
+      403:
+        description: Access denied
+      404:
+        description: Application not found
+    """
     try:
         application = Application.query.get_or_404(application_id)
         
@@ -272,7 +365,24 @@ def update_application(application_id):
 @applications_bp.route('/applications/<int:application_id>/submit', methods=['POST'])
 @require_auth
 def submit_application(application_id):
-    """Submit application for review"""
+    """
+    Submit a draft application for review
+    ---
+    tags:
+      - Applications
+    parameters:
+      - in: path
+        name: application_id
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Application submitted
+      400:
+        description: Application is not in draft status
+      404:
+        description: Application not found
+    """
     try:
         application = Application.query.get_or_404(application_id)
         
@@ -314,7 +424,36 @@ def submit_application(application_id):
 @applications_bp.route('/applications/<int:application_id>/review', methods=['POST'])
 @require_auth
 def review_application(application_id):
-    """Review application (admin only)"""
+    """
+    Review and update the status of an application (council staff/admin only)
+    ---
+    tags:
+      - Applications
+    parameters:
+      - in: path
+        name: application_id
+        type: integer
+        required: true
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required: [status]
+          properties:
+            status:
+              type: string
+              enum: [approved, rejected, under_review, waitlisted]
+            feedback:
+              type: string
+    responses:
+      200:
+        description: Application status updated
+      403:
+        description: Access denied
+      404:
+        description: Application not found
+    """
     try:
         if not request.current_user.is_admin:
             return jsonify({'error': 'Admin access required'}), 403
@@ -352,7 +491,17 @@ def review_application(application_id):
 @applications_bp.route('/applications/stats', methods=['GET'])
 @require_auth
 def get_application_stats():
-    """Get application statistics"""
+    """
+    Get application statistics for the current user's council
+    ---
+    tags:
+      - Applications
+    responses:
+      200:
+        description: Application statistics
+      401:
+        description: Unauthorised
+    """
     try:
         if request.current_user.is_admin:
             # Admin sees all stats

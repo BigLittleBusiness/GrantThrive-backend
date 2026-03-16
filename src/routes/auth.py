@@ -70,17 +70,57 @@ def verify_token(token):
 @auth_bp.route('/register', methods=['POST'])
 def register():
     """
-    Public user registration endpoint.
-
-    Supported user_type values:
-      - 'community_member'  : immediate activation, no approval required
-      - 'council'           : first registrant from a given email domain becomes
-                              COUNCIL_ADMIN (PENDING, awaits System Admin approval);
-                              subsequent registrations from the same domain are
-                              blocked — additional staff must be invited by the
-                              Council Admin through the portal
-
-    The 'council_staff' user_type is intentionally not accepted here.
+    Register a new user
+    ---
+    tags:
+      - Auth
+    security: []
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required: [email, password, first_name, last_name, user_type]
+          properties:
+            email:
+              type: string
+              example: jane.doe@brisbane.qld.gov.au
+            password:
+              type: string
+              example: SecurePass123!
+            first_name:
+              type: string
+              example: Jane
+            last_name:
+              type: string
+              example: Doe
+            user_type:
+              type: string
+              enum: [community_member, council]
+              example: council
+            organization_name:
+              type: string
+              example: Brisbane City Council
+            position:
+              type: string
+              example: Grants Manager
+            phone:
+              type: string
+              example: "+61 7 3403 8888"
+            subdomain:
+              type: string
+              description: Preferred subdomain (e.g. 'brisbane' -> brisbane.grantthrive.com.au)
+              example: brisbane
+    responses:
+      201:
+        description: Registration successful
+      400:
+        description: Validation error or missing fields
+      409:
+        description: Council domain already registered
+      500:
+        description: Server error
     """
     try:
         data = request.get_json()
@@ -238,7 +278,36 @@ def register():
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
-    """User login endpoint"""
+    """
+    Login and receive a JWT bearer token
+    ---
+    tags:
+      - Auth
+    security: []
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required: [email, password]
+          properties:
+            email:
+              type: string
+              example: jane.doe@brisbane.qld.gov.au
+            password:
+              type: string
+              example: SecurePass123!
+    responses:
+      200:
+        description: Login successful - returns user and JWT token
+      401:
+        description: Invalid credentials
+      403:
+        description: Account pending, suspended, or rejected
+      500:
+        description: Server error
+    """
     try:
         data = request.get_json()
 
@@ -281,7 +350,29 @@ def login():
 
 @auth_bp.route('/verify-token', methods=['POST'])
 def verify_user_token():
-    """Verify JWT token endpoint"""
+    """
+    Verify a JWT token and return the associated user
+    ---
+    tags:
+      - Auth
+    security: []
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required: [token]
+          properties:
+            token:
+              type: string
+              example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+    responses:
+      200:
+        description: Token is valid
+      401:
+        description: Invalid or expired token
+    """
     try:
         data = request.get_json()
         token = data.get('token')
@@ -312,7 +403,29 @@ def verify_user_token():
 
 @auth_bp.route('/demo-login', methods=['POST'])
 def demo_login():
-    """Demo login for testing purposes"""
+    """
+    Demo login for development and testing
+    ---
+    tags:
+      - Auth
+    security: []
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          properties:
+            demo_type:
+              type: string
+              enum: [council_admin, council_staff, community_member, professional_consultant]
+              example: council_admin
+    responses:
+      200:
+        description: Demo login successful
+      400:
+        description: Invalid demo type
+    """
     try:
         data = request.get_json()
         demo_type = data.get('demo_type', 'community_member')
@@ -402,5 +515,13 @@ def demo_login():
 
 @auth_bp.route('/logout', methods=['POST'])
 def logout():
-    """Logout — JWT is stateless; client removes the token."""
+    """
+    Logout (stateless - client discards the token)
+    ---
+    tags:
+      - Auth
+    responses:
+      200:
+        description: Logout acknowledged
+    """
     return jsonify({'message': 'Logout successful'}), 200

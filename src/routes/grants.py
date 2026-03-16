@@ -31,7 +31,35 @@ def require_auth(f):
 
 @grants_bp.route('/grants', methods=['GET'])
 def get_grants():
-    """Get all grants with filtering and pagination"""
+    """
+    List all grant programs with filtering and pagination
+    ---
+    tags:
+      - Grants
+    security: []
+    parameters:
+      - in: query
+        name: page
+        type: integer
+        default: 1
+      - in: query
+        name: per_page
+        type: integer
+        default: 10
+      - in: query
+        name: category
+        type: string
+      - in: query
+        name: status
+        type: string
+        description: Filter by grant status (open, closed, draft)
+      - in: query
+        name: search
+        type: string
+    responses:
+      200:
+        description: Paginated list of grants
+    """
     try:
         # Query parameters
         page = request.args.get('page', 1, type=int)
@@ -100,7 +128,23 @@ def get_grants():
 
 @grants_bp.route('/grants/<int:grant_id>', methods=['GET'])
 def get_grant(grant_id):
-    """Get specific grant by ID"""
+    """
+    Get a specific grant program by ID
+    ---
+    tags:
+      - Grants
+    security: []
+    parameters:
+      - in: path
+        name: grant_id
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Grant details
+      404:
+        description: Grant not found
+    """
     try:
         grant = Grant.query.get_or_404(grant_id)
         
@@ -125,7 +169,43 @@ def get_grant(grant_id):
 @grants_bp.route('/grants', methods=['POST'])
 @require_auth
 def create_grant():
-    """Create new grant (admin only)"""
+    """
+    Create a new grant program (council admin only)
+    ---
+    tags:
+      - Grants
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required: [title, description, total_budget, application_deadline]
+          properties:
+            title:
+              type: string
+              example: Community Infrastructure Grant 2026
+            description:
+              type: string
+            total_budget:
+              type: number
+              example: 50000
+            application_deadline:
+              type: string
+              format: date
+              example: '2026-09-30'
+            category:
+              type: string
+            max_grant_amount:
+              type: number
+    responses:
+      201:
+        description: Grant created
+      400:
+        description: Validation error
+      401:
+        description: Unauthorised
+    """
     try:
         if not request.current_user.is_admin:
             return jsonify({'error': 'Admin access required'}), 403
@@ -188,7 +268,26 @@ def create_grant():
 @grants_bp.route('/grants/<int:grant_id>', methods=['PUT'])
 @require_auth
 def update_grant(grant_id):
-    """Update existing grant (admin only)"""
+    """
+    Update an existing grant program (council admin only)
+    ---
+    tags:
+      - Grants
+    parameters:
+      - in: path
+        name: grant_id
+        type: integer
+        required: true
+      - in: body
+        name: body
+        schema:
+          type: object
+    responses:
+      200:
+        description: Grant updated
+      404:
+        description: Grant not found
+    """
     try:
         if not request.current_user.is_admin:
             return jsonify({'error': 'Admin access required'}), 403
@@ -252,7 +351,22 @@ def update_grant(grant_id):
 @grants_bp.route('/grants/<int:grant_id>', methods=['DELETE'])
 @require_auth
 def delete_grant(grant_id):
-    """Delete grant (admin only)"""
+    """
+    Delete a grant program (council admin only)
+    ---
+    tags:
+      - Grants
+    parameters:
+      - in: path
+        name: grant_id
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Grant deleted
+      404:
+        description: Grant not found
+    """
     try:
         if not request.current_user.is_admin:
             return jsonify({'error': 'Admin access required'}), 403
@@ -274,14 +388,31 @@ def delete_grant(grant_id):
 
 @grants_bp.route('/grants/categories', methods=['GET'])
 def get_categories():
-    """Get all grant categories"""
+    """
+    Get all available grant categories
+    ---
+    tags:
+      - Grants
+    security: []
+    responses:
+      200:
+        description: List of categories
+    """
     categories = [{'value': cat.value, 'label': cat.value.replace('_', ' ').title()} 
                  for cat in GrantCategory]
     return jsonify({'categories': categories}), 200
 
 @grants_bp.route('/grants/stats', methods=['GET'])
 def get_grant_stats():
-    """Get grant statistics"""
+    """
+    Get grant program statistics
+    ---
+    tags:
+      - Grants
+    responses:
+      200:
+        description: Grant statistics
+    """
     try:
         total_grants = Grant.query.count()
         open_grants = Grant.query.filter(Grant.status == GrantStatus.OPEN).count()

@@ -1,6 +1,7 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from src.models.user import db, User, UserStatus, UserRole
 from src.routes.auth import verify_token
+from src.utils.email import email_service
 from datetime import datetime
 
 admin_bp = Blueprint('admin', __name__)
@@ -41,7 +42,40 @@ def require_admin(f):
 @require_auth
 @require_admin
 def get_users():
-    """Get all users with filtering"""
+    """
+    List all users with optional filtering
+    ---
+    tags:
+      - Admin
+    parameters:
+      - in: query
+        name: role
+        type: string
+        description: Filter by role
+      - in: query
+        name: status
+        type: string
+        description: Filter by status (active, pending, suspended, rejected)
+      - in: query
+        name: search
+        type: string
+        description: Search by name, email, or organisation
+      - in: query
+        name: page
+        type: integer
+        default: 1
+      - in: query
+        name: per_page
+        type: integer
+        default: 20
+    responses:
+      200:
+        description: Paginated list of users
+      401:
+        description: Unauthorised
+      403:
+        description: Admin access required
+    """
     try:
         page = request.args.get('page', 1, type=int)
         per_page = min(request.args.get('per_page', 20, type=int), 100)
@@ -104,7 +138,19 @@ def get_users():
 @require_auth
 @require_admin
 def get_pending_users():
-    """Get users pending approval"""
+    """
+    Get all users awaiting System Admin approval
+    ---
+    tags:
+      - Admin
+    responses:
+      200:
+        description: List of pending users with days_pending field
+      401:
+        description: Unauthorised
+      403:
+        description: Admin access required
+    """
     try:
         pending_users = User.query.filter(User.status == UserStatus.PENDING).order_by(User.created_at.desc()).all()
         
@@ -127,7 +173,24 @@ def get_pending_users():
 @require_auth
 @require_admin
 def approve_user(user_id):
-    """Approve pending user"""
+    """
+    Approve a pending user registration
+    ---
+    tags:
+      - Admin
+    parameters:
+      - in: path
+        name: user_id
+        type: integer
+        required: true
+    responses:
+      200:
+        description: User approved and notified by email
+      400:
+        description: User is not in pending status
+      404:
+        description: User not found
+    """
     try:
         user = User.query.get_or_404(user_id)
         
@@ -137,12 +200,24 @@ def approve_user(user_id):
         user.status = UserStatus.ACTIVE
         user.updated_at = datetime.utcnow()
         db.session.commit()
-        
+
+        # Notify the user their account has been approved
+        try:
+            email_service.send_welcome_email(
+                user_email=user.email,
+                user_name=user.full_name,
+                user_role=user.role.value
+            )
+        except Exception as email_err:
+            current_app.logger.warning(
+                f'Approval welcome email failed for {user.email}: {email_err}'
+            )
+
         return jsonify({
             'message': 'User approved successfully',
             'user': user.to_dict()
         }), 200
-        
+
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
@@ -151,7 +226,30 @@ def approve_user(user_id):
 @require_auth
 @require_admin
 def reject_user(user_id):
-    """Reject pending user"""
+    """
+    Reject a pending user registration
+    ---
+    tags:
+      - Admin
+    parameters:
+      - in: path
+        name: user_id
+        type: integer
+        required: true
+      - in: body
+        name: body
+        schema:
+          type: object
+          properties:
+            reason:
+              type: string
+              example: Could not verify council affiliation.
+    responses:
+      200:
+        description: User rejected and notified by email
+      404:
+        description: User not found
+    """
     try:
         user = User.query.get_or_404(user_id)
         
@@ -163,14 +261,36 @@ def reject_user(user_id):
         
         user.status = UserStatus.REJECTED
         user.updated_at = datetime.utcnow()
-        # Note: In a full implementation, you'd store the rejection reason
         db.session.commit()
-        
+
+        # Notify the user their application was not approved
+        try:
+            email_service.send_email(
+                to_email=user.email,
+                subject='GrantThrive — Account Application Update',
+                html_content=f"""
+                <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
+                  <h2 style="color:#1e40af">GrantThrive Account Application</h2>
+                  <p>Dear {user.full_name},</p>
+                  <p>Thank you for your interest in GrantThrive. Unfortunately, we were
+                  unable to approve your account application at this time.</p>
+                  {'<p><strong>Reason:</strong> ' + rejection_reason + '</p>' if rejection_reason else ''}
+                  <p>If you believe this decision was made in error, or if you have any
+                  questions, please contact us at support@grantthrive.com.au.</p>
+                  <p>Kind regards,<br>The GrantThrive Team</p>
+                </div>
+                """
+            )
+        except Exception as email_err:
+            current_app.logger.warning(
+                f'Rejection email failed for {user.email}: {email_err}'
+            )
+
         return jsonify({
             'message': 'User rejected successfully',
             'user': user.to_dict()
         }), 200
-        
+
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
@@ -179,7 +299,31 @@ def reject_user(user_id):
 @require_auth
 @require_admin
 def suspend_user(user_id):
-    """Suspend active user"""
+    """
+    Suspend an active user account
+    ---
+    tags:
+      - Admin
+    parameters:
+      - in: path
+        name: user_id
+        type: integer
+        required: true
+      - in: body
+        name: body
+        schema:
+          type: object
+          properties:
+            reason:
+              type: string
+    responses:
+      200:
+        description: User suspended
+      400:
+        description: User is not active
+      404:
+        description: User not found
+    """
     try:
         user = User.query.get_or_404(user_id)
         
@@ -206,7 +350,24 @@ def suspend_user(user_id):
 @require_auth
 @require_admin
 def reactivate_user(user_id):
-    """Reactivate suspended user"""
+    """
+    Reactivate a suspended user account
+    ---
+    tags:
+      - Admin
+    parameters:
+      - in: path
+        name: user_id
+        type: integer
+        required: true
+    responses:
+      200:
+        description: User reactivated
+      400:
+        description: User is not suspended
+      404:
+        description: User not found
+    """
     try:
         user = User.query.get_or_404(user_id)
         
@@ -230,7 +391,38 @@ def reactivate_user(user_id):
 @require_auth
 @require_admin
 def update_user(user_id):
-    """Update user information (admin only)"""
+    """
+    Update a user's profile information (admin only)
+    ---
+    tags:
+      - Admin
+    parameters:
+      - in: path
+        name: user_id
+        type: integer
+        required: true
+      - in: body
+        name: body
+        schema:
+          type: object
+          properties:
+            first_name:
+              type: string
+            last_name:
+              type: string
+            phone:
+              type: string
+            organization_name:
+              type: string
+            role:
+              type: string
+              description: System admin only
+    responses:
+      200:
+        description: User updated
+      404:
+        description: User not found
+    """
     try:
         user = User.query.get_or_404(user_id)
         data = request.get_json()
@@ -271,7 +463,15 @@ def update_user(user_id):
 @require_auth
 @require_admin
 def get_admin_stats():
-    """Get admin dashboard statistics"""
+    """
+    Get platform-wide statistics for the admin dashboard
+    ---
+    tags:
+      - Admin
+    responses:
+      200:
+        description: Platform statistics including user counts and role breakdown
+    """
     try:
         # User statistics
         total_users = User.query.count()
@@ -308,7 +508,22 @@ def get_admin_stats():
 @require_auth
 @require_admin
 def get_user_details(user_id):
-    """Get detailed user information"""
+    """
+    Get detailed information for a specific user including application stats
+    ---
+    tags:
+      - Admin
+    parameters:
+      - in: path
+        name: user_id
+        type: integer
+        required: true
+    responses:
+      200:
+        description: User details with application statistics
+      404:
+        description: User not found
+    """
     try:
         user = User.query.get_or_404(user_id)
         

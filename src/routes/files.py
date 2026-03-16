@@ -71,7 +71,27 @@ def ensure_upload_directory():
 @files_bp.route('/files/upload', methods=['POST'])
 @require_auth
 def upload_file():
-    """Upload file endpoint"""
+    """
+    Upload a file (multipart/form-data)
+    ---
+    tags:
+      - Files
+    consumes:
+      - multipart/form-data
+    parameters:
+      - in: formData
+        name: file
+        type: file
+        required: true
+        description: The file to upload
+    responses:
+      200:
+        description: File uploaded successfully
+      400:
+        description: No file provided or file type not allowed
+      401:
+        description: Unauthorised
+    """
     try:
         # Check if file is in request
         if 'file' not in request.files:
@@ -132,7 +152,23 @@ def upload_file():
 
 @files_bp.route('/files/<filename>', methods=['GET'])
 def download_file(filename):
-    """Download file endpoint"""
+    """
+    Download a file by filename
+    ---
+    tags:
+      - Files
+    security: []
+    parameters:
+      - in: path
+        name: filename
+        type: string
+        required: true
+    responses:
+      200:
+        description: File content
+      404:
+        description: File not found
+    """
     try:
         # Validate filename
         if not filename or '..' in filename:
@@ -155,7 +191,22 @@ def download_file(filename):
 @files_bp.route('/files/<filename>/info', methods=['GET'])
 @require_auth
 def get_file_info(filename):
-    """Get file information"""
+    """
+    Get metadata for a specific file
+    ---
+    tags:
+      - Files
+    parameters:
+      - in: path
+        name: filename
+        type: string
+        required: true
+    responses:
+      200:
+        description: File metadata
+      404:
+        description: File not found
+    """
     try:
         upload_path = ensure_upload_directory()
         file_path = os.path.join(upload_path, filename)
@@ -184,7 +235,22 @@ def get_file_info(filename):
 @files_bp.route('/files/<filename>', methods=['DELETE'])
 @require_auth
 def delete_file(filename):
-    """Delete file endpoint"""
+    """
+    Delete a file by filename
+    ---
+    tags:
+      - Files
+    parameters:
+      - in: path
+        name: filename
+        type: string
+        required: true
+    responses:
+      200:
+        description: File deleted
+      404:
+        description: File not found
+    """
     try:
         # Validate filename
         if not filename or '..' in filename:
@@ -208,7 +274,20 @@ def delete_file(filename):
 @files_bp.route('/files/user/<int:user_id>', methods=['GET'])
 @require_auth
 def get_user_files(user_id):
-    """Get files uploaded by specific user"""
+    """
+    Get all files uploaded by a specific user
+    ---
+    tags:
+      - Files
+    parameters:
+      - in: path
+        name: user_id
+        type: integer
+        required: true
+    responses:
+      200:
+        description: List of files
+    """
     try:
         # Check permissions
         if request.current_user.id != user_id and not request.current_user.is_admin:
@@ -230,7 +309,16 @@ def get_user_files(user_id):
 
 @files_bp.route('/files/config', methods=['GET'])
 def get_upload_config():
-    """Get upload configuration"""
+    """
+    Get file upload configuration (allowed types, max size)
+    ---
+    tags:
+      - Files
+    security: []
+    responses:
+      200:
+        description: Upload configuration
+    """
     return jsonify({
         'max_file_size': MAX_FILE_SIZE,
         'max_file_size_mb': MAX_FILE_SIZE // (1024 * 1024),

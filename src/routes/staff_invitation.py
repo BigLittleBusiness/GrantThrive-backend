@@ -73,13 +73,43 @@ def _require_council_admin(f):
 @_require_council_admin
 def invite_staff():
     """
-    Invite a new staff member to the council.
-
-    Request body (JSON):
-        email        : str  – invitee's email address (must share council domain)
-        first_name   : str  – optional, used to personalise the email
-        last_name    : str  – optional
-        role         : str  – 'council_staff' (default) or 'council_admin'
+    Invite a new staff member to the council (Council Admin only)
+    ---
+    tags:
+      - Staff Invitation
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required: [email]
+          properties:
+            email:
+              type: string
+              description: Must share the same domain as the inviting admin
+              example: john.smith@brisbane.qld.gov.au
+            first_name:
+              type: string
+              example: John
+            last_name:
+              type: string
+              example: Smith
+            role:
+              type: string
+              enum: [council_staff, council_admin]
+              default: council_staff
+    responses:
+      200:
+        description: Invitation sent by email
+      400:
+        description: Validation error or domain mismatch
+      401:
+        description: Unauthorised
+      403:
+        description: Council Admin access required
+      409:
+        description: Email already registered
     """
     try:
         data = request.get_json() or {}
@@ -185,13 +215,40 @@ def invite_staff():
 @staff_invitation_bp.route('/council/accept-invitation', methods=['POST'])
 def accept_invitation():
     """
-    Accept a staff invitation and create the new user account.
-
-    Request body (JSON):
-        token      : str  – the invitation token from the email link
-        password   : str  – the new user's chosen password (min 8 chars)
-        first_name : str  – required if not supplied at invite time
-        last_name  : str  – required if not supplied at invite time
+    Accept a staff invitation and create the new user account
+    ---
+    tags:
+      - Staff Invitation
+    security: []
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required: [token, password]
+          properties:
+            token:
+              type: string
+              description: Invitation token from the email link
+            password:
+              type: string
+              description: Minimum 8 characters
+            first_name:
+              type: string
+            last_name:
+              type: string
+    responses:
+      201:
+        description: Account created and welcome email sent
+      400:
+        description: Missing fields or weak password
+      404:
+        description: Invalid or expired token
+      409:
+        description: Email already registered
+      410:
+        description: Invitation already used or expired
     """
     try:
         data = request.get_json() or {}
@@ -285,8 +342,17 @@ def accept_invitation():
 @_require_council_admin
 def list_invitations():
     """
-    List all invitations sent by the current Council Admin's council.
-    Returns pending, accepted, and expired invitations.
+    List all invitations sent by the current Council Admin's council
+    ---
+    tags:
+      - Staff Invitation
+    responses:
+      200:
+        description: List of invitations with status (pending, accepted, expired)
+      401:
+        description: Unauthorised
+      403:
+        description: Council Admin access required
     """
     try:
         admin = request.current_user
