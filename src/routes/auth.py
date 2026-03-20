@@ -5,6 +5,8 @@ from src.utils.email import email_service
 import jwt
 import re
 import os
+import phonenumbers
+from phonenumbers import NumberParseException
 from datetime import datetime, timedelta
 
 auth_bp = Blueprint('auth', __name__)
@@ -148,6 +150,31 @@ def register():
             return jsonify({
                 'error': 'Password does not meet requirements. Missing: ' + ', '.join(pw_errors) + '.'
             }), 400
+
+        # --- Phone number validation (server-side safety net) ---
+        phone_raw = data.get('phone', '').strip()
+        if phone_raw:
+            phone_valid = False
+            for region in ('AU', 'NZ'):
+                try:
+                    parsed = phonenumbers.parse(phone_raw, region)
+                    if phonenumbers.is_valid_number(parsed):
+                        phone_valid = True
+                        break
+                except NumberParseException:
+                    pass
+            # Also try without a default region (handles +61 / +64 prefixed numbers)
+            if not phone_valid:
+                try:
+                    parsed = phonenumbers.parse(phone_raw, None)
+                    if phonenumbers.is_valid_number(parsed):
+                        phone_valid = True
+                except NumberParseException:
+                    pass
+            if not phone_valid:
+                return jsonify({
+                    'error': 'Please enter a valid Australian or New Zealand phone number.'
+                }), 400
 
         email = data['email'].strip().lower()
         user_type = data['user_type']
