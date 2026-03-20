@@ -131,6 +131,24 @@ def register():
             if not data.get(field):
                 return jsonify({'error': f'{field} is required'}), 400
 
+        # --- Password complexity validation (server-side safety net) ---
+        password = data['password']
+        pw_errors = []
+        if len(password) < 10:
+            pw_errors.append('at least 10 characters')
+        if not re.search(r'[A-Z]', password):
+            pw_errors.append('one uppercase letter (A–Z)')
+        if not re.search(r'[a-z]', password):
+            pw_errors.append('one lowercase letter (a–z)')
+        if not re.search(r'[0-9]', password):
+            pw_errors.append('one number (0–9)')
+        if not re.search(r'[^A-Za-z0-9]', password):
+            pw_errors.append('one special character (!@#$%…)')
+        if pw_errors:
+            return jsonify({
+                'error': 'Password does not meet requirements. Missing: ' + ', '.join(pw_errors) + '.'
+            }), 400
+
         email = data['email'].strip().lower()
         user_type = data['user_type']
 
