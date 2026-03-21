@@ -25,7 +25,6 @@ from src.models.user import db, User, UserRole, UserStatus
 from src.routes.auth import verify_token, generate_token
 from src.utils.email import email_service
 from datetime import datetime, timedelta
-from werkzeug.security import generate_password_hash
 import secrets
 import re
 

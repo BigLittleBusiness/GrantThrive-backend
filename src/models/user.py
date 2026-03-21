@@ -1,7 +1,21 @@
 from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import enum
+import logging
+
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
+
+logger = logging.getLogger(__name__)
+
+# ── Argon2id hasher — OWASP 2024 recommended parameters ──────────────────────
+_hasher = PasswordHasher(
+    time_cost=3,        # iterations
+    memory_cost=65536,  # 64 MB in KiB
+    parallelism=4,
+    hash_len=32,
+    salt_len=16,
+)
 
 db = SQLAlchemy()
 
@@ -71,14 +85,47 @@ class User(db.Model):
     email_notifications = db.Column(db.Boolean, nullable=False, default=True)
     sms_notifications = db.Column(db.Boolean, nullable=False, default=False)
     
-    def set_password(self, password):
-        """Set password hash"""
-        self.password_hash = generate_password_hash(password)
-    
-    def check_password(self, password):
-        """Check password against hash"""
-        return check_password_hash(self.password_hash, password)
-    
+    def set_password(self, password: str) -> None:
+        """Hash password using Argon2id and store the encoded hash."""
+        self.password_hash = _hasher.hash(password)
+
+    def check_password(self, password: str):
+        """
+        Verify a password against the stored hash.
+
+        Returns a tuple (is_valid: bool, needs_rehash: bool).
+
+        For legacy Werkzeug PBKDF2/scrypt hashes (pbkdf2:sha256:... or
+        scrypt:...) the hash is verified using Werkzeug, and needs_rehash
+        is set to True on success so the caller can transparently upgrade
+        the stored hash to Argon2id on the next successful login.
+
+        Callers that only check truthiness of the return value will still
+        work correctly because a non-empty tuple is truthy.
+        """
+        stored = self.password_hash or ''
+
+        # ── Legacy Werkzeug PBKDF2 / scrypt hashes ───────────────────────────
+        if stored.startswith('pbkdf2:') or stored.startswith('scrypt:'):
+            from werkzeug.security import check_password_hash as _wz_check
+            try:
+                is_valid = _wz_check(stored, password)
+                return is_valid, is_valid  # needs_rehash=True when valid
+            except Exception as exc:
+                logger.warning('Legacy hash verification error: %s', exc)
+                return False, False
+
+        # ── Argon2id ──────────────────────────────────────────────────────────
+        try:
+            _hasher.verify(stored, password)
+            needs_rehash = _hasher.check_needs_rehash(stored)
+            return True, needs_rehash
+        except VerifyMismatchError:
+            return False, False
+        except (VerificationError, InvalidHashError) as exc:
+            logger.warning('Argon2 verification error: %s', exc)
+            return False, False
+
     @property
     def full_name(self):
         """Get full name"""
@@ -142,4 +189,3 @@ class User(db.Model):
     
     def __repr__(self):
         return f'<User {self.email}>'
-

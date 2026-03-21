@@ -1,5 +1,4 @@
 from flask import Blueprint, request, jsonify, current_app
-from werkzeug.security import generate_password_hash
 from src.models.user import db, User, UserRole, UserStatus
 from src.utils.email import email_service
 import jwt
@@ -361,8 +360,23 @@ def login():
 
         user = User.query.filter_by(email=data['email'].strip().lower()).first()
 
-        if not user or not user.check_password(data['password']):
+        if not user:
             return jsonify({'error': 'Invalid email or password'}), 401
+
+        # check_password returns (is_valid, needs_rehash); handle both tuple
+        # and legacy plain-bool returns for safety.
+        result = user.check_password(data['password'])
+        if isinstance(result, tuple):
+            is_valid, needs_rehash = result
+        else:
+            is_valid, needs_rehash = bool(result), False
+
+        if not is_valid:
+            return jsonify({'error': 'Invalid email or password'}), 401
+
+        # Transparently upgrade legacy PBKDF2 hashes to Argon2id on login
+        if needs_rehash:
+            user.set_password(data['password'])
 
         if user.status != UserStatus.ACTIVE:
             status_messages = {
