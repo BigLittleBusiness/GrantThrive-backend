@@ -27,8 +27,17 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 from flask import Flask
 from src.models.user import db, User, UserRole, UserStatus
-from werkzeug.security import generate_password_hash
+from argon2 import PasswordHasher as _PasswordHasher
 from datetime import datetime
+
+# Argon2id hasher — OWASP 2024 recommended parameters (matches src/models/user.py)
+_hasher = _PasswordHasher(
+    time_cost=3,
+    memory_cost=65536,
+    parallelism=4,
+    hash_len=32,
+    salt_len=16,
+)
 
 
 def create_app():
@@ -121,12 +130,12 @@ def main():
             print("Aborted. No account was created.")
             sys.exit(0)
 
-        # Create the user
+        # Create the user — password hashed with Argon2id (OWASP 2024)
         user = User(
             first_name=first_name,
             last_name=last_name,
             email=email,
-            password_hash=generate_password_hash(password),
+            password_hash=_hasher.hash(password),
             role=UserRole.SYSTEM_ADMIN,
             status=UserStatus.ACTIVE,
             created_at=datetime.utcnow(),

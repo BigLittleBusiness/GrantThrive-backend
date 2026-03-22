@@ -485,6 +485,11 @@ def demo_login():
       400:
         description: Invalid demo type
     """
+    # Guard: only available in development or testing environments
+    import os
+    if os.environ.get('FLASK_ENV', 'production') not in ('development', 'testing'):
+        return jsonify({'error': 'This endpoint is not available in production.'}), 403
+
     try:
         data = request.get_json()
         demo_type = data.get('demo_type', 'community_member')

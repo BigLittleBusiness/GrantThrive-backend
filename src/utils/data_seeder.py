@@ -7,6 +7,17 @@ from datetime import datetime, timedelta
 import uuid
 import random
 
+from argon2 import PasswordHasher as _PasswordHasher
+
+# Argon2id hasher — OWASP 2024 recommended parameters (matches src/models/user.py)
+_hasher = _PasswordHasher(
+    time_cost=3,
+    memory_cost=65536,
+    parallelism=4,
+    hash_len=32,
+    salt_len=16,
+)
+
 # Import all models first to ensure relationships are properly defined
 from ..models.user import User, UserRole, UserStatus, db
 from ..models.grant import Grant
@@ -35,7 +46,7 @@ def seed_database():
         # Create council admin
         admin_user = User(
             email=f"admin@{council['email_domain']}",
-            password_hash="$2b$12$LQv3c1yqBwEHFl5ePEjNNONHNONHNONHNONHNONHNONHNONHNONH",  # password: admin123
+            password_hash=_hasher.hash("admin123"),  # dev seed only — not for production
             first_name="Council",
             last_name="Administrator",
             role=UserRole.COUNCIL_ADMIN,
@@ -59,7 +70,7 @@ def seed_database():
         staff_user = User(
             id=str(uuid.uuid4()),
             email=f"grants@{council['email_domain']}",
-            password_hash="$2b$12$LQv3c1yqBwEHFl5ePEjNNONHNONHNONHNONHNONHNONHNONHNONH",  # password: staff123
+            password_hash=_hasher.hash("staff123"),  # dev seed only — not for production
             first_name="Grants",
             last_name="Officer",
             role="council_staff",
@@ -82,7 +93,7 @@ def seed_database():
         admin_user = User(
             id=str(uuid.uuid4()),
             email=f"admin@{council['email_domain']}",
-            password_hash="$2b$12$LQv3c1yqBwEHFl5ePEjNNONHNONHNONHNONHNONHNONHNONHNONH",
+            password_hash=_hasher.hash("admin123"),  # dev seed only — not for production
             first_name="Council",
             last_name="Administrator",
             role="council_admin",
@@ -148,7 +159,7 @@ def seed_database():
         user = User(
             id=str(uuid.uuid4()),
             email=org_data['email'],
-            password_hash="$2b$12$LQv3c1yqBwEHFl5ePEjNNONHNONHNONHNONHNONHNONHNONHNONH",  # password: community123
+            password_hash=_hasher.hash("community123"),  # dev seed only — not for production
             first_name=org_data['name'].split()[0],
             last_name=org_data['name'].split()[1],
             role="community_member",
@@ -192,7 +203,7 @@ def seed_database():
         user = User(
             id=str(uuid.uuid4()),
             email=consultant_data['email'],
-            password_hash="$2b$12$LQv3c1yqBwEHFl5ePEjNNONHNONHNONHNONHNONHNONHNONHNONH",  # password: consultant123
+            password_hash=_hasher.hash("consultant123"),  # dev seed only — not for production
             first_name=consultant_data['name'].split()[1] if 'Dr.' in consultant_data['name'] else consultant_data['name'].split()[0],
             last_name=consultant_data['name'].split()[-1],
             role="professional_consultant",
@@ -459,7 +470,7 @@ def seed_demo_data():
             user = User(
                 id=str(uuid.uuid4()),
                 email=user_data['email'],
-                password_hash="$2b$12$LQv3c1yqBwEHFl5ePEjNNONHNONHNONHNONHNONHNONHNONHNONH",
+                password_hash=_hasher.hash(user_data['password']),
                 first_name=user_data['first_name'],
                 last_name=user_data['last_name'],
                 role=user_data['role'],
